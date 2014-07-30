@@ -18,72 +18,94 @@ class Subpackage:
                        "%changelog"]
 
     def __init__(self):
-        self.files    = None  #set of tuple (src_file, target, tag, attr)
+        self.files = set()    #set of tuple (src_file, target, tag, attr)
                               # e.g. %config, %doc, %ghost, %dir
                               
-        self.tags     = None  # dict of tags: "key" -> list[vals]
-                              # e.g. "Requires" -> ["foo", "bar"]
+        self.tags = {}     # dict of tags: "key" -> list[vals]
+                           # e.g. "Requires" -> ["foo", "bar"]
+                           # in case of single value tag, no list of values is
+                           # needed, e.g. "Name" -> "foo", "Sumary" -> bar
                                                             
-        self.scripts  = None  # dict of scripts: "key" -> string
-                              # e.g. "%prep" -> "%autosetup"
-    
-    # default write method used for packages
-    # packages usually do not use all the tags nor scripts available,
-    # e.g. patches, thus these are omitted from the writing process                     
-    def write(self, out=sys.stdout):
+        self.scripts = {}  # dict of scripts: "key" -> string
+                           # e.g. "%prep" -> "%autosetup"
+
+
+    def write(self, out):
+        """Default write method used for packages. Packages usually do not use
+        all the tags nor scripts available, e.g. patches, thus these are omitted
+        from the writing process."""
+        
         for tag in self.tag_keywords:
             if tag in self.tags.keys():
-                for val in self.tags.get(tag):
-                    if tag == "Name":
-                        print("\n%package {}".format(val), file=out)
-                    else:
+                tag_value = self.tags.get(tag)
+                value_type = type(tag_value)
+                if value_type is list:  # item is a list of values
+                    for val in tag_value:
                         print("{}: {}".format(tag,val), file=out)
+                        
+                else:  # item is a single value
+                    if tag == "Name":
+                        print("\n%package {}".format(tag_value), file=out)
+                    else:
+                        print("{}: {}".format(tag,tag_value), file=out)
         
         for script in self.script_keywords:
             if script in self.scripts.keys():
-                print("\n{}\n{}".format(script+" "+self.tags['Name'][0],self.scripts.get(script)), file=out)
-
-
+                try:
+                    print("\n{}\n{}".format(script+" "+self.tags['Name'],
+                                        self.scripts.get(script)), file=out)
+                except TypeError:
+                    print("\n{}\n{}".format(script+" "+self.tags['Name'][0],
+                                        self.scripts.get(script)), file=out)
+    
+    def mark_doc(self, file):
+        """Helper function for GUI to mark additional files as documentation.
+        Function adds '%doc' attribute to a specific file or creates a new entry
+        in the set of files."""
+        
+        pass
                      
 class Spec(Subpackage):
     """SPEC properties holder"""
+    
     def __init__(self):
         super(Spec, self).__init__()
-        #self.license     = None
-        #self.url         = None
-        #self.vendor      = None
-        #self.packager    = None
         self.subpackages = None  # list[Subpackage]
-        self.changelogs  = None  # list[Changelog]
-        #self.patches     = None  # list[str:paths]
+        self.changelogs = None  # list[Changelog]
 
     def load(source_file):
         pass
     
-    
-    # modified inherited write method
-    def write(self, out=sys.stdout):
+    def write(self, out):
+        """Modified inherited write method. See Subpackage.write() for more
+        information."""
+        
         patch_index = 1   # used for patch numbering
         
         # first tags need to written 
         for tag in self.tag_keywords:
             if tag in self.tags.keys():
-                for val in self.tags.get(tag):
-                    if tag == "Patch":
-                        print("{}: {}".format(tag+str(patch_index),val), file=out)
-                        patch_index += 1
-                    else:
-                        print("{}: {}".format(tag,val), file=out)
-        
+                tag_value = self.tags.get(tag)
+                value_type = type(tag_value)
+                if value_type is list:    # item is a list of values
+                    for val in tag_value:
+                        if tag == "Patch":
+                            print("{}: {}".format(tag+str(patch_index),val), file=out)
+                            patch_index += 1
+                        else:
+                            print("{}: {}".format(tag,val), file=out)
+                else:    # item is a single value
+                    print("{}: {}".format(tag,tag_value), file=out)
+                    
         # second packages and scripts need to be written       
         for script in self.script_keywords:
             if script == "%package":
-                    for package in self.subpackages:
-                        package.write(out)
+                for package in self.subpackages:
+                    package.write(out)
                         
             if script in self.scripts.keys():
                 print("\n{}\n{}".format(script,self.scripts.get(script)), file=out)
-        
+
         # changelog is the last to be written at the end of file
         print("\n%changelog", file=out)
         for changelog in self.changelogs:
@@ -91,8 +113,8 @@ class Spec(Subpackage):
 
 
     class Changelog:
-        __weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-        __months   = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug",
+        _weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+        _months   = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug",
                       "Sep", "Oct", "Nov", "Dec"]
         
         def __init__(self, date, author, email, message):
@@ -102,8 +124,8 @@ class Spec(Subpackage):
             self.message = message
         
         def __str__(self):
-            return "* {} {} {} {} <{}>\n- {}".format(self.__weekdays[self.date.weekday()],
-                                               self.__months[self.date.month],
+            return "* {} {} {} {} <{}>\n- {}".format(self._weekdays[self.date.weekday()],
+                                               self._months[self.date.month],
                                                self.date.year,
                                                self.author,
                                                self.email,
