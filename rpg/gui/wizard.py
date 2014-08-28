@@ -170,9 +170,12 @@ class ImportPage(QtWidgets.QWizardPage):
     def openImportPageFileDialog(self):
         ''' Open file browser in new dialog window'''
         brows = QFileDialog()
-        #brows.setFileMode(QFileDialog.Directory)
-        brows.getExistingDirectory(self, "Choose source folder or archive",
-                                   "~/")
+        self.getPath = brows.getOpenFileName(self,
+                                             "Choose source folder or archive",
+                                             "/home",
+                                             "Archives (*.zip *.xz *.gz)")
+        self.path = self.getPath[0]
+        self.importEdit.setText(self.path)
 
     def validatePage(self):
         ''' [Bool] Function that invokes just after pressing the next button
@@ -191,8 +194,7 @@ class ImportPage(QtWidgets.QWizardPage):
         self.base.spec.tags['Vendor'] = self.vendorEdit.text()
         self.base.spec.tags['Packager'] = self.packagerEdit.text()
         self.base.spec.tags['Path'] = self.importEdit.text()
-        self.base.process_archive_or_dir()  # TODO add dir
-
+        self.base.process_archive_or_dir(self.base.spec.tags['Path'])
         return True
 
     def nextId(self):
@@ -243,7 +245,6 @@ class ScriptsPage(QtWidgets.QWizardPage):
         return True
 
     def nextId(self):
-        self.base.spec.scripts["%build"] = self.buildEdit.text
         return Wizard.PagePatches
 
 
@@ -265,6 +266,7 @@ class PatchesPage(QtWidgets.QWizardPage):
         self.addButton.clicked.connect(self.openPatchesPageFileDialog)
         self.removeButton.setMaximumWidth(68)
         self.removeButton.setMaximumHeight(60)
+        self.removeButton.clicked.connect(self.removeItemFromListWidget)
 
         grid = QGridLayout()
         grid.addWidget(patchesLabel, 0, 0)
@@ -274,15 +276,33 @@ class PatchesPage(QtWidgets.QWizardPage):
 
         self.setLayout(grid)
 
+    def removeItemFromListWidget(self):
+        self.item = self.listPatches.takeItem(self.listPatches.currentRow())
+        self.item = None
+
     def openPatchesPageFileDialog(self):
         brows = QFileDialog()
-        brows.getOpenFileName(self, "/home")
+        self.getPath = brows.getOpenFileName(self,
+                                             "Choose patches",
+                                             "/home",
+                                             "All files (*)")
+        self.newPath = self.getPath[0]
+        self.listPatches.addItem(self.newPath)
 
-    def nextId(self):
-        self.base.apply_patches()  # TODO pass list of paths (strings)
+    def validatePage(self):
+        self.itemsCount = self.listPatches.count()
+        self.pathes = []
+        for i in range(0, self.itemsCount):
+            self.pathes.append(self.listPatches.item(i).text())
+
+        print(self.pathes)
+        self.base.apply_patches(self.pathes)
         self.base.run_pathed_sources_analysis()
         self.base.build_project()
         self.base.run_installed_files_analysis()
+        return True
+
+    def nextId(self):
         return Wizard.PageRequires
 
 
