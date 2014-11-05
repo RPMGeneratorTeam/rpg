@@ -7,6 +7,8 @@ from rpg.plugins.misc.find_translation import FindTranslationPlugin
 from rpg.plugins.misc.find_library import FindLibraryPlugin
 from rpg.plugins.project_builder.make import MakePlugin
 from rpg.utils import get_architecture
+from rpg.plugins.lang.c import CPlugin
+from rpg.spec import Spec
 import sys
 
 
@@ -79,3 +81,11 @@ class FindPatchPluginTest(PluginTestCase):
         self.spec.Requires.sort()
         imports.sort()
         self.assertEqual(self.spec.Requires, imports)
+
+    def test_c(self):
+        self.spec = Spec()
+        self.c_plug = CPlugin()
+        self.c_plug.patched(self.test_project_dir, self.spec, self.sack)
+        self.assertEqual(self.spec.Requires.sort(),
+                         ['/usr/include/bits', '/usr/include',
+                          '/usr/include/sys', '/usr/include/gnu'].sort())
