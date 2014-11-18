@@ -495,10 +495,10 @@ class SubpackagesPage(QtWidgets.QWizardPage):
                                               invisibleRootItem().child(0),
                                               a, "file")
 
-    def cleanupPage(self):
+    '''def cleanupPage(self):
         self.base.spec.files = []
         self.tree.clear()
-        self.filesListWidget.clear()
+        self.filesListWidget.clear()'''
 
     def __init__(self, Wizard, parent=None):
         super(SubpackagesPage, self).__init__(parent)
