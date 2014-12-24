@@ -10,34 +10,38 @@ class Subpackage(dict):
     files_translations = []
 
     # names of 'single' keys
-    singles = ["Name",
-               "Version",
-               "Release",
-               "Summary"
-               "Group"
-               "License"
-               "URL"
-               "BuildArch"
-               "BuildRoot"]
+    _singles = ["Name",
+                "Version",
+                "Release",
+                "Summary",
+                "Group",
+                "License",
+                "URL",
+                "Vendor",
+                "Packager",
+                "description",
+                "BuildArch",
+                "BuildRoot",
+                ]
 
     # names of scripts
-    scripts = ["prep",
-               "build",
-               "pre",
-               "install",
-               "check",
-               "post",
-               "preun",
-               "postun",
-               "pretrans",
-               "posttrans",
-               "clean",
-               "changelog"]
+    _scripts = ["prep",
+                "build",
+                "pre",
+                "install",
+                "check",
+                "post",
+                "preun",
+                "postun",
+                "pretrans",
+                "posttrans",
+                "clean",
+                "changelog"]
 
     # lists that could be appended
-    appendants = ["Requires",
-                  "BuildRequires",
-                  "Provides"]
+    _appendants = ["Requires",
+                   "BuildRequires",
+                   "Provides"]
 
     def __init__(self):
         tags = {"Name": "", "Version": "", "Release": "", "Summary": "",
@@ -73,18 +77,18 @@ class Subpackage(dict):
     def __setattr__(self, key, value):
         ''' Set's attribute to key in dict '''
         try:
-            if key in self.singles:
+            if key in self._singles:
                 if not isinstance(value, str):
                     raise TypeError(value)
 
-            if key not in self.scripts and isinstance(value, type(Command())):
+            if key not in self._scripts and isinstance(value, type(Command())):
                 raise TypeError(value)
 
             if not isinstance(value, (list, str, type(Command()))):
                 raise TypeError(value)
 
             self.__getattr__(key)  # raises AttributeError
-            if key in self.scripts:
+            if key in self._scripts:
                 if isinstance(value, type(Command())):
                     self.__setitem__(key, value)
                 else:
@@ -96,25 +100,28 @@ class Subpackage(dict):
 
     def _get_tags(self):
         block = ''
-        for ordered_key in self.singles:
+        for ordered_key in self._singles:
             for key, value in self.items():
-                if value and str(key) is ordered_key: 
-                    block += str(key) + ': ' + value + '\n'
+                if value and key is ordered_key:
+                    if value and key is "description":
+                        block += "%" + key + ': ' + value + '\n'
+                    else:
+                        block += key + ': ' + value + '\n'
         return block
 
 
     def _get_requires(self):
         block = ''
-        for ordered_key in self.appendants:
+        for ordered_key in self._appendants:
             for key, value in self.items():
-                if value and str(key) is ordered_key:
-                    for part in value:
-                        block += '%' + str(key) + ':' + '\t' + part + '\n'
+                if value and key is ordered_key:
+                        for part in value:
+                            block += key + ':' + '\t' + part + '\n'
         return block
 
     def _get_scripts(self):
         block = ''
-        for ordered_key in self.scripts:
+        for ordered_key in self._scripts:
             for key, value in self.items():
                 if str(value) and str(key) is ordered_key:
                     if isinstance(value, Command):
@@ -176,13 +183,10 @@ class Spec(Subpackage):
         super(Spec, self).__init__()
 
     def __str__(self):
-        output = ''
         tags = self._get_tags();
         requires = self._get_requires();
         scripts = self._get_scripts()
-        output = tags + requires + scripts
-        print (output)
-        return output
+        return tags + requires + scripts
     
     def _get_tags(self):
         return super(Spec, self)._get_tags()

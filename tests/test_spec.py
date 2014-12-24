@@ -24,8 +24,8 @@ class SpecTest(RpgTestCase):
         self.spec.Requires.append("python3")
         self.assertTrue(isinstance(self.spec["Requires"], list))
         self.spec.Requires.append("python3-qt5")
-        expected = "%Requires:\tpython3\n" \
-            "%Requires:\tpython3-qt5\n" \
+        expected = "Requires:\tpython3\n" \
+            "Requires:\tpython3-qt5\n" \
             "%build\ncmake .\nmake\n\n" \
             "%install\nmake install\n\n" \
             "%check\nmake test\n\n"
