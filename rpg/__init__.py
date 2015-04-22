@@ -1,3 +1,4 @@
+import dnf
 import logging
 import platform
 from pathlib import Path
@@ -29,10 +30,9 @@ class Base(object):
         self._package_builder = PackageBuilder()
         self._source_loader = SourceLoader()
         self._copr_uploader = CoprUploader()
-
+        
     def dnf_load_sack(self):
         logging.info('DNF sack is loading')
-        import dnf
         with dnf.Base() as self._dnf_base:
             self._dnf_base.conf.releasever = dnf.rpm.detect_releasever(
                 self._dnf_base.conf.installroot)
@@ -105,7 +105,7 @@ class Base(object):
         p = Path(path)
         self._hash = self.compute_checksum(p)
         self._input_name = p.name
-        self.setup_workspace()
+        self._setup_workspace()
         self._source_loader.load_sources(p, self.extracted_dir)
 
     def run_raw_sources_analysis(self):
@@ -173,7 +173,7 @@ class Base(object):
             self.installed_dir
         ]
 
-    def setup_workspace(self):
+    def _setup_workspace(self):
         """make sure all directories used later will exist"""
         try:
             shutil.rmtree(str(self.base_dir))
