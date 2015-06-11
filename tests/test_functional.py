@@ -49,5 +49,5 @@ class FunctionalTest(RpgTestCase):
         self.assertEqual(
             [("/hello", None, None)], base.spec.files)
         base.write_spec()
-        #base.build_packages("fedora-21-x86_64")
-        #self.assertEqual(base.spec.files, "")
+        base.build_srpm()
+        self.assertTrue(base.srpm_path.exists())
