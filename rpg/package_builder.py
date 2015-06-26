@@ -2,6 +2,7 @@ from os.path import expanduser
 from subprocess import call
 from rpg.utils import copy_file
 from rpg.command import Command
+import logging
 
 
 class PackageBuilder(object):
@@ -32,5 +33,6 @@ class PackageBuilder(object):
                 " " + str(output_file)).execute()
                 
     def fetch_repos(self, dist, arch):
+        logging.info("New thread for fetch repos started")
         config_file = dist + '-' + arch
         Command("mock --init --no-clean -r " + config_file).execute()
