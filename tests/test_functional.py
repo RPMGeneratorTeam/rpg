@@ -1,5 +1,6 @@
 from support import RpgTestCase
 from rpg import Base
+from os.path import expanduser
 
 
 class FunctionalTest(RpgTestCase):
