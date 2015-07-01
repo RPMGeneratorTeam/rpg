@@ -49,6 +49,14 @@ From project root directory execute::
     cmake .
     make test
 
+To run unit tests only execute::
+
+    make test-unit
+
+To run long tests only execute::
+
+    make test-long
+
 
 Documentation
 =============
