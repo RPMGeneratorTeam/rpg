@@ -18,7 +18,7 @@ class CPlugin(Plugin):
 
         makedepend = "makedepend -w10000 -f" + file_name + " -I" \
                      + str(project_dir) + " " + \
-                     ' '.join(files_list)
+                     ' '.join(files_list) + " 2>/dev/null"
         Command(makedepend).execute()
 
         regex = compile(r'.*\.h')
@@ -29,5 +29,5 @@ class CPlugin(Plugin):
                                    if regex.match(s) and not regex2.match(s)]))
         unlink(file_name)
 
-        spec.Requires += _ret_paths
-        spec.BuildRequires += _ret_paths
+        spec.required_files += _ret_paths
+        spec.build_required_files += _ret_paths

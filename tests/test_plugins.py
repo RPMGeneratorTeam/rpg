@@ -69,7 +69,16 @@ class FindPatchPluginTest(PluginTestCase):
                  ('/archives/sample.tar.xz', None, None),
                  ('/Makefile', None, None),
                  ('/py/requires/sourcecode2.py', None, None)]
-        sorted_files = sorted(files, key=lambda e: e[0])
+        excludes = [('/patch/__pycache__/', r'%exclude', None),
+                    ('/c/__pycache__/', r'%exclude', None),
+                    ('/hello_project/__pycache__/', r'%exclude', None),
+                    ('/py/__pycache__/', r'%exclude', None),
+                    ('/py/requires/__pycache__/', r'%exclude', None),
+                    ('/translation/__pycache__/', r'%exclude', None),
+                    ('/libs/__pycache__/', r'%exclude', None),
+                    ('/archives/__pycache__/', r'%exclude', None),
+                    ('/__pycache__/', r'%exclude', None)]
+        sorted_files = sorted(files + excludes, key=lambda e: e[0])
         self.assertEqual(self.spec.files,
                          sorted_files)
 
@@ -101,13 +110,13 @@ class FindPatchPluginTest(PluginTestCase):
         imports = [("/usr/lib{0}/python{1}.{2}/" +
                     "lib-dynload/math.cpython-{1}{2}m.so")
                    .format(arch, version.major, version.minor)]
-        self.spec.Requires.sort()
+        self.spec.required_files.sort()
         imports.sort()
-        self.assertEqual(self.spec.Requires, imports)
+        self.assertEqual(self.spec.required_files, imports)
 
     def test_files_to_pkgs(self):
         ftpp = FilesToPkgsPlugin()
-        self.spec.Requires = [
+        self.spec.required_files = [
             "/usr/lib/python3.4/site-packages/dnf/conf/read.py",
             "/usr/lib/python3.4/site-packages/dnf/yum/sqlutils.py",
             "/usr/lib/python3.4/site-packages/dnf/query.py"
@@ -122,7 +131,7 @@ class FindPatchPluginTest(PluginTestCase):
         expected = ['/usr/include', '/usr/include/bits',
                     '/usr/include/gnu', '/usr/include/sys']
         expected.sort()
-        self.spec.Requires.sort()
-        self.spec.BuildRequires.sort()
-        self.assertEqual(self.spec.Requires, expected)
-        self.assertEqual(self.spec.BuildRequires, expected)
+        self.spec.required_files.sort()
+        self.spec.build_required_files.sort()
+        self.assertEqual(self.spec.required_files, expected)
+        self.assertEqual(self.spec.build_required_files, expected)
