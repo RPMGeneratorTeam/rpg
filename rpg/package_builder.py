@@ -2,6 +2,7 @@ from os.path import expanduser
 from subprocess import call
 from rpg.utils import copy_file
 from rpg.command import Command
+from pathlib import Path
 
 
 class PackageBuilder(object):
@@ -25,8 +26,8 @@ class PackageBuilder(object):
         # Build srpm pakcage from given spec_file and tarball
         call(["rpmdev-setuptree", ""])
         home = expanduser("~")
-        Command("cp " + str(tarball) + " " + home + "/rpmbuild/SOURCES")\
-            .execute()
+        path = home + "/build/SOURCES"
+        Command("cp " + str(tarball) + " " + str(path)).execute()
         output = Command("rpmbuild -bs " + str(spec_file)).execute()
         Command("mv " + str(output.split()[-1]) +
                 " " + str(output_file)).execute()
