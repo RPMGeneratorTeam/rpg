@@ -2,6 +2,7 @@ lang: python
 branches:
   only:
   - master
+  - Coveralls
 notifications:
   email:
     on_success: never
@@ -18,6 +19,7 @@ install:
 - sudo pip install /tmp/tito.tar.gz
 - cd /tmp/copr/python
 - sudo pip install -r requirements.txt
+- sudo pip install coveralls
 - sudo python setup.py install
 - sudo groupadd mock
 - sudo usermod -a -G mock travis
@@ -25,5 +27,10 @@ install:
 before_script:
 - sudo cp rel-eng/travis/mock/rpg.cfg /etc/mock/
 - git config user.email "travis@localhost" && git config user.name "Travis"
-script: rel-eng/travis/build.sh
-after_success: rel-eng/travis/upload.sh
+script:
+- rel-eng/travis/build.sh
+after_success:
+- rel-eng/travis/upload.sh
+- cmake .
+- make coverage
+- coveralls
