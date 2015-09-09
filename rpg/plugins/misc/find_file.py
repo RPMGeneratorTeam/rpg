@@ -11,9 +11,9 @@ class FindFilePlugin(Plugin):
             if (item.is_file() and '__pycache__' not in str(item)):
                 self.files.append(("/" + str(item.relative_to(project_dir)),
                                    None, None))
-                self.exclude[re.sub(r"[^/]*$", "",
-                                    "/" + str(item.relative_to(project_dir))) +
-                             "__pycache__/"] = True
+            elif str(item).endswith('__pycache__'):
+                self.files.append(("/" + str(item.relative_to(project_dir)) + "/",
+                                   None, None))
         sorted_files = sorted(self.files +
                               [(key, r'%exclude', None)
                                for key in self.exclude],
