@@ -16,6 +16,7 @@ from os import makedirs
 from os import geteuid
 from os import remove
 import shutil
+import rpm
 
 
 class Base(object):
@@ -172,7 +173,7 @@ class Base(object):
         """executed in background after filled requires screen"""
         self._project_builder.install(self.compiled_dir,
                                       self.installed_dir,
-                                      self.spec.install)
+                                      rpm.expandMacro(self.spec.install))
 
     def run_installed_source_analysis(self):
         """executed in background after successful project build"""
@@ -226,7 +227,7 @@ class Base(object):
         """executed in background after filled requires screen"""
         self._project_builder.build(self.extracted_dir,
                                     self.compiled_dir,
-                                    self.spec.build)
+                                    rpm.expandMacro(self.spec.build))
 
     def copr_set_config(self, username, login, token):
         self.cl = CoprClient(
