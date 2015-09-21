@@ -82,6 +82,7 @@ class FindPatchPluginTest(PluginTestCase):
                  ('/hello_project/hello-1.4.tar.gz', None, None),
                  ('/py/plugin0.py', None, None),
                  ('/py/sourcecode.py', None, None),
+                 ('/py/__pycache__/', None, None),
                  ('/translation/CZ.mo', None, None),
                  ('/libs/libstatic.a', None, None),
                  ('/libs/libdynamic.so.1', None, None),
@@ -92,6 +93,7 @@ class FindPatchPluginTest(PluginTestCase):
                  ('/archives/rpg-0.0.2-1.tar.gz', None, None),
                  ('/Makefile', None, None),
                  ('/py/requires/sourcecode2.py', None, None),
+                 ('/py/requires/__pycache__/', None, None),
                  ('/mock_project/mock-1.0.tar.gz', None, None),
                  ('/c/CMakeCache.txt', None, None),
                  ('/c/CMakeLists.txt', None, None),
@@ -99,19 +101,7 @@ class FindPatchPluginTest(PluginTestCase):
                  ('/setuptools/testscript.py', None, None),
                  ('/autotools/configure.ac', None, None),
                  ('/autotools/Makefile.am', None, None)]
-        excludes = [('/patch/__pycache__/', r'%exclude', None),
-                    ('/c/__pycache__/', r'%exclude', None),
-                    ('/hello_project/__pycache__/', r'%exclude', None),
-                    ('/py/__pycache__/', r'%exclude', None),
-                    ('/py/requires/__pycache__/', r'%exclude', None),
-                    ('/translation/__pycache__/', r'%exclude', None),
-                    ('/libs/__pycache__/', r'%exclude', None),
-                    ('/archives/__pycache__/', r'%exclude', None),
-                    ('/__pycache__/', r'%exclude', None),
-                    ('/srpm/__pycache__/', '%exclude', None),
-                    ('/mock_project/__pycache__/', '%exclude', None),
-                    ('/setuptools/__pycache__/', '%exclude', None),
-                    ('/autotools/__pycache__/', '%exclude', None)]
+        excludes = []
         sorted_files = sorted(files + excludes, key=lambda e: e[0])
         self.assertEqual(sorted(list(self.spec.files)),
                          sorted_files)
