@@ -77,7 +77,9 @@ class IntroPage(QtWidgets.QWizardPage):
             "RPG - RPM Package Generator is tool, that guides you through" +
             " the creation of a RPM package.<br>" +
             "Please fill following details about your package.<br>For " +
-            "more information use tool tips (move the cursor on the label)." +
+            "more information use tool tips (under the labels).<br>" +
+            "<strong>Note</strong>: All fields with the red asterisk " +
+            "(<font color=\'#FF3333\'>*</font>) are required."
             "</p></body></html>")
 
         mainLayout = QVBoxLayout()
