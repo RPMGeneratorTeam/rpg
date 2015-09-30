@@ -19,6 +19,7 @@ BuildRequires:  makedepend
 BuildRequires:  rpmdevtools
 BuildRequires:  python3-hawkey
 BuildRequires:  mock
+BuildRequires:  python3-PyYAML
 BuildArch:      noarch
 
 Requires:       python3 >= 3.4
