@@ -1064,7 +1064,6 @@ class CoprLoginPage(QtWidgets.QWizardPage):
             "on <a href=\"https://copr.fedoraproject.org/api\">" +
             "Copr API</a>. Please log in and copy your information.<br>" +
             " It will be saved on config file, but nowhere else." +
-            " You also need python3-copr-1.58 or higher." +
             "</span></p></body></html>")
 
         self.usernameLabel = QLabel("Username<font color=\'#FF3333\'>*</font>")
@@ -1227,6 +1226,7 @@ class CoprDistroPage(QtWidgets.QWizardPage):
         self.x64_CheckBox.setCheckState(QtCore.Qt.Checked)
 
         grid = QGridLayout()
+        grid = QGridLayout()
         framerelease = QFrame()
         framerelease.setFrameShape(QFrame.Panel)
         framerelease.setFrameShadow(QFrame.Sunken)
@@ -1242,6 +1242,7 @@ class CoprDistroPage(QtWidgets.QWizardPage):
         grid.addWidget(self.EPEL7_CheckBox, 2, 1)
         grid.addWidget(self.EPEL6_CheckBox, 2, 2)
         grid.addWidget(self.EPEL5_CheckBox, 2, 3)
+        grid.setVerticalSpacing(20)
         grid.addWidget(releaseArchBoxLabel, 3, 0, 1, 1)
         grid.addWidget(self.x64_CheckBox, 4, 1)
         grid.addWidget(self.i386_CheckBox, 4, 2)
