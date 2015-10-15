@@ -5,13 +5,16 @@ from rpg.plugin import Plugin
 class FilesToPkgsPlugin(Plugin):
 
     TRANSLATED = {}
+    IGNORE = []
 
     def installed(self, project_dir, spec, sack):
         """ Resolves files in (Build) requires into packages """
         def _resolve(files, query):
             for _file in files:
                 try:
-                    if _file in self.TRANSLATED:
+                    if _file in self.IGNORE:
+                        continue
+                    elif _file in self.TRANSLATED:
                         yield self.TRANSLATED[_file]
                     else:
                         pckg = query.filter(file__glob=_file)[0]
@@ -20,6 +23,7 @@ class FilesToPkgsPlugin(Plugin):
                             self.TRANSLATED[_f] = pckg.name
                         yield pckg.name
                 except IndexError:
+                    self.IGNORE.append(_file)
                     logging.log(logging.WARN,
                                 "For '{}' have not been found any package"
                                 .format(_file))
