@@ -6,13 +6,18 @@ from rpg.plugins.misc.find_translation import FindTranslationPlugin
 from rpg.plugins.misc.find_library import FindLibraryPlugin
 from rpg.plugins.misc.files_to_pkgs import FilesToPkgsPlugin
 from rpg.plugins.lang.c import CPlugin
+from rpg.plugins.source_loader.tar import TarPlugin
+from rpg.plugins.source_loader.zip import ZipPlugin
 from rpg.spec import Spec
-from unittest import mock
 from rpg.plugins.project_builder.cmake import CMakePlugin
 from rpg.plugins.project_builder.setuptools import SetuptoolsPlugin
 from rpg.plugins.project_builder.autotools import AutotoolsPlugin
 from rpg.plugins.project_builder.maven import MavenPlugin
+from pathlib import Path
+from shutil import rmtree
 import re
+import tempfile
+from os import remove
 
 
 class MockSack:
@@ -29,15 +34,6 @@ class MockedPackage:
     files = []
 
 
-class MockedLogging:
-
-    called = 0
-
-    @classmethod
-    def log(cls, *args, **kwargs):
-        cls.called += 1
-
-
 class MockedDNFQuery:
 
     def filter(self, **kwd):
@@ -50,12 +46,40 @@ class MockedDNFQuery:
         return self
 
 
+class MockedPath:
+
+    MACROED_PATHS = {
+        'usr/bin/p': '%{_bindir}/p',
+        'usr/include/i.h': '%{_includedir}/i.h',
+        'usr/include/befa/file.hpp': '%{_includedir}/befa/file.hpp'
+        # This cannot be tested on 32-bit systems:
+        #   "usr/lib64/libl.so": "%{_libdir}/libl.so",
+        # same with python sitelib and sitearch
+    }
+
+    def __init__(self, path):
+        self.path = path
+
+    def __str__(self):
+        return self.path
+
+    def glob(self, *args, **kwargs):
+        return [MockedPath(f) for f in self.MACROED_PATHS.keys()]
+
+    def is_file(self, *args, **kwargs):
+        return self.path != '~'
+
+    def relative_to(self, *args, **kwargs):
+        return self.path
+
+
 class FindPatchPluginTest(PluginTestCase):
 
     def setUp(self):
         self.maxDiff = None
         self.spec = Spec()
         self.sack = None
+        self.temp_dir = Path(tempfile.mkdtemp())
 
     def test_is_patch(self):
         patch = self.test_project_dir / "patch" / "0.patch"
@@ -74,14 +98,11 @@ class FindPatchPluginTest(PluginTestCase):
 
     def test_find_files(self):
         plugin = FindFilePlugin()
-        plugin.installed(self.test_project_dir / "setuptools",
+        plugin.installed(MockedPath(self.test_project_dir / "installed"),
                          self.spec, self.sack)
-        files = sorted([
-            ("/setup.py", None, None),
-            ("/testscript.py", None, None)
-        ])
         self.assertEqual(sorted(list(self.spec.files)),
-                         files)
+                         sorted([(MockedPath.MACROED_PATHS[f], None, None)
+                                 for f in MockedPath.MACROED_PATHS]))
 
     def test_find_translation_file(self):
         plugin = FindTranslationPlugin()
@@ -98,15 +119,28 @@ class FindPatchPluginTest(PluginTestCase):
         self.assertEqual(str(self.spec.post), lib)
         self.assertEqual(str(self.spec.postun), lib)
 
+    def test_python_find_objects(self):
+        plugin = PythonPlugin()
+        plugin.python_interpret = "python"
+        objfiles = [
+            self.test_project_dir / "py" / "requires" / "sourcecode2.pyo",
+            self.test_project_dir / "py" / "requires" / "sourcecode2.pyc"
+        ]
+        plugin.installed(
+            self.test_project_dir / "py" / "requires", self.spec, self.sack)
+        for obj in objfiles:
+            self.assertFileExists(obj)
+            if obj.exists():
+                remove(str(obj))
+
     def test_python_find_requires(self):
         plugin = PythonPlugin()
         plugin.patched(self.test_project_dir / "py" / "requires",
                        self.spec, self.sack)
         self.assertTrue(any(re.match(
-            r"/usr/lib.*/python.*/lib-dynload/math\.cpython.*\.so", req)
+            r"/usr/lib.*/python.*/lib-dynload/math.*\.so", req)
             for req in self.spec.required_files))
 
-    @mock.patch("logging.log", new=MockedLogging.log)
     def test_files_to_pkgs(self):
         ftpp = FilesToPkgsPlugin()
         self.spec.Requires = set()
@@ -204,3 +238,20 @@ class FindPatchPluginTest(PluginTestCase):
                         "mvn(org.apache.maven.plugins:maven-source-plugin)",
                         "mvn(org.apache.felix:maven-bundle-plugin)"])
         self.assertEqual(self.spec.BuildRequires, expected)
+
+    def test_tar(self):
+        tar_plug = TarPlugin()
+        temp_tar = self.test_project_dir / "archives" / "rpg-0.0.2-1.tar.gz"
+        tar_plug.extraction(temp_tar, self.temp_dir)
+        self.assertTrue(list(self.temp_dir.glob("**/*")))
+        self.assertTarEqualDir(temp_tar, self.temp_dir)
+
+    def test_zip(self):
+        zip_plugin = ZipPlugin()
+        temp_tar = self.test_project_dir / "archives" / "rpg-0.0.2-1.zip"
+        zip_plugin.extraction(temp_tar, self.temp_dir)
+        self.assertTrue(list(self.temp_dir.glob("**/*")))
+        self.assertZipEqualDir(temp_tar, self.temp_dir)
+
+    def tearDown(self):
+        rmtree(str(self.temp_dir))

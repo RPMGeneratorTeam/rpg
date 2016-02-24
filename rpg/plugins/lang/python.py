@@ -1,8 +1,16 @@
 from rpg.plugin import Plugin
 from rpg.command import Command
-from modulefinder import ModuleFinder
-import logging
-import rpm
+from rpg.utils import rpm_dir_dump
+
+
+MACROS = rpm_dir_dump()
+
+
+def macrofy(path):
+    """ find prefix in path and replace it with macro """
+    for m in MACROS:
+        if path.startswith(m[0]):
+            return m[1] + path[len(m[0]):]
 
 
 class PythonPlugin(Plugin):
@@ -10,29 +18,25 @@ class PythonPlugin(Plugin):
     def patched(self, project_dir, spec, sack):
         """ Find python dependencies """
         for item in list(project_dir.glob('**/*.py')):
-            try:
-                mod = ModuleFinder()
-                mod.run_script(str(item))
-                for _, mod in mod.modules.items():
-                    if mod.__file__ and mod.__file__.startswith("/usr/lib"):
-                        spec.required_files.add(mod.__file__)
-            except ImportError as ie:
-                logging.warn("Exception was raised by ModuleFinder:\n" +
-                             str(ie) + "\nOn file: " + str(item))
+            spec.required_files |= set(Command(
+                self.python_interpret + " -c \"" +
+                "from modulefinder import ModuleFinder; " +
+                "mod = ModuleFinder(); " +
+                "mod.run_script('" + str(item) + "'); " +
+                "print('\\n'.join([mod.__file__ " +
+                "for _, mod in mod.modules.items() "
+                "if mod.__file__ and " +
+                "mod.__file__.startswith('/usr/lib')]))\""
+            ).execute().split('\n'))
 
     def installed(self, project_dir, spec, sack):
         """ Compiles all python files depending on which python version they
             are and appends them into files macro """
-        python_version = ""
         for py_file in list(project_dir.glob('**/*.py')):
-            if rpm.expandMacro("%{python_sitearch}") in str(py_file) or\
-                    rpm.expandMacro("%{python_sitelib}") in str(py_file):
-                python_version = "python2"
-            elif rpm.expandMacro("%{python3_sitearch}") in str(py_file) or\
-                    rpm.expandMacro("%{python3_sitelib}") in str(py_file):
-                python_version = "python3"
-            Command([python_version + ' ' + sw +
+            Command([self.python_interpret + ' ' + sw +
                      ' -c \'import compileall; compileall.compile_file("' +
                      str(py_file) + '")\'' for sw in ["-O", ""]]).execute()
-        spec.files.update([("/" + str(_f.relative_to(project_dir)), None, None)
-                           for _f in project_dir.glob('**/*.py*')])
+        spec.files.update([
+            (macrofy("/" + str(_f.relative_to(project_dir))), None, None)
+            for _f in project_dir.glob('**/*.py*')
+        ])

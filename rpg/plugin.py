@@ -1,6 +1,12 @@
 class Plugin:
     """ Class from which are plugins derived
 
+        def extraction(self, source, dest):
+            pass
+
+        def download(self, source, dest):
+            pass
+
         def extracted(self, project_dir, spec, sack):
             pass
 
@@ -19,3 +25,6 @@ class Plugin:
         def mock_recover(self, log, spec):
             pass
     """
+
+    # default python interpret - may be changed
+    python_interpret = "python3"
