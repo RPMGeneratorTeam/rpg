@@ -2,15 +2,16 @@ from os.path import expanduser
 from PyQt5 import QtWidgets, QtCore, QtGui
 from PyQt5.QtWidgets import (QLabel, QVBoxLayout, QLineEdit, QCheckBox,
                              QGroupBox, QPushButton, QGridLayout,
-                             QTextEdit, QFileDialog,
-                             QComboBox, QWizard, QFrame)
+                             QPlainTextEdit, QFileDialog, QDialog,
+                             QComboBox, QWizard, QFrame, QApplication)
 from rpg.gui.dialogs import DialogImport
-from rpg.utils import path_to_str
 from pathlib import Path
 from rpg.command import Command
 import subprocess
 import platform
+import urllib.request
 from threading import Thread
+from rpg.gui.thread import ThreadWrapper
 
 
 class Wizard(QtWidgets.QWizard):
@@ -39,7 +40,7 @@ class Wizard(QtWidgets.QWizard):
                     QWizard.BackButton, QWizard.NextButton,
                     QWizard.FinishButton])
         self.setButtonLayout(btnList)
-        self.setStyleSheet("QTextEdit { border-style: solid;" +
+        self.setStyleSheet("QPlainTextEdit { border-style: solid;" +
                            "border-width: 1px;" +
                            "border-color: rgb(178, 182, 178);" +
                            "border-radius: 3px;" +
@@ -106,6 +107,7 @@ class ImportPage(QtWidgets.QWizardPage):
         super(ImportPage, self).__init__(parent)
 
         self.base = Wizard.base
+        self.new_thread = None
         self.redQLineEdit = ("QLineEdit { border-style: solid;" +
                              "border-width: 1px;" +
                              "border-color: #FF3333;" +
@@ -201,12 +203,7 @@ class ImportPage(QtWidgets.QWizardPage):
         self.setLayout(mainLayout)
 
     def checkPath(self):
-        ''' Checks, if path to import is correct while typing'''
-        path = Path(self.importEdit.text())
-        if(path.exists()):
-            self.importEdit.setStyleSheet("")
-        else:
-            self.importEdit.setStyleSheet(self.redQLineEdit)
+        self.importEdit.setStyleSheet("")
 
     def importPath(self):
         ''' Returns path selected file or archive'''
@@ -229,21 +226,35 @@ class ImportPage(QtWidgets.QWizardPage):
             ###### Setting up RPG class references ###### '''
 
         # Verifying path
+        QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
         path = Path(self.importEdit.text())
-        if(path.exists()):
-            self.base.target_arch = self.ArchEdit.currentText()
-            self.base.target_distro = self.DistroEdit.currentText()
-            self.base.load_project_from_url(self.importEdit.text().strip())
-            self.base.run_extracted_source_analysis()
-            new_thread = Thread(
-                target=self.base.fetch_repos, args=(self.base.target_distro,
-                                                    self.base.target_arch))
-            new_thread.start()
-            self.importEdit.setStyleSheet("")
-            return True
-        else:
-            self.importEdit.setStyleSheet(self.redQLineEdit)
-            return False
+        if not (path.exists()):
+            urlpath = self.importEdit.text()
+            try:
+                urllib.request.urlopen(urlpath)
+            except:
+                self.importEdit.setStyleSheet(self.redQLineEdit)
+                QApplication.restoreOverrideCursor()
+                return False
+        self.base.target_arch = self.ArchEdit.currentText()
+        self.base.target_distro = self.DistroEdit.currentText()
+        self.base.load_project_from_url(self.importEdit.text().strip())
+        self.base.run_extracted_source_analysis()
+        self.new_thread = Thread(
+            target=self.base.fetch_repos, args=(self.base.target_distro,
+                                                self.base.target_arch))
+        self.new_thread.start()
+        self.importEdit.setStyleSheet("")
+        return True
+
+    def cleanupPage(self):
+        """ Stops the thread (there are no official way to stop thread.
+            This will unlocked thread and it will be stopped
+            with GUI - without error). """
+        if self.new_thread:
+            self.new_thread._tstate_lock = None
+            self.new_thread._stop()
+            self.new_thread.join()
 
     def nextId(self):
         ''' [int] Function that determines the next page after the current one
@@ -261,6 +272,7 @@ class MandatoryPage(QtWidgets.QWizardPage):
         self.releaseEdit.setText("1")
         self.licenseEdit.setText(str(self.base.spec.License))
         self.URLEdit.setText(str(self.base.spec.URL))
+        QApplication.restoreOverrideCursor()
 
     def __init__(self, Wizard, parent=None):
         super(MandatoryPage, self).__init__(parent)
@@ -274,7 +286,10 @@ class MandatoryPage(QtWidgets.QWizardPage):
                              "rgb(233,233,233);}")
 
         self.setTitle(self.tr("    Mandatory fields"))
-        self.setSubTitle(self.tr("Basic required information"))
+        self.setSubTitle(self.tr("Basic required information. " +
+                                 "Name, version and release " +
+                                 "will be used to create unique " +
+                                 "package name."))
 
         self.nameLabel = QLabel("Name<font color=\'#FF3333\'>*</font>")
         self.nameEdit = QLineEdit()
@@ -428,7 +443,7 @@ class SummaryPage(QtWidgets.QWizardPage):
              "American English (required)."))
 
         self.descriptionLabel = QLabel("Description")
-        self.descriptionEdit = QTextEdit()
+        self.descriptionEdit = QPlainTextEdit()
         self.descriptionEdit.setMinimumHeight(30)
         self.descriptionLabel.setBuddy(self.descriptionEdit)
         self.descriptionLabelText = QLabel(
@@ -468,6 +483,7 @@ class SummaryPage(QtWidgets.QWizardPage):
         else:
             self.base.spec.description = self.descriptionEdit.toPlainText()
         self.base.spec.Summary = self.summaryEdit.text()
+        QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
         self.base.run_patched_source_analysis()
         return True
 
@@ -481,9 +497,10 @@ class SummaryPage(QtWidgets.QWizardPage):
 class ScriptsPage(QtWidgets.QWizardPage):
 
     def initializePage(self):
-        self.prepareEdit.setText(str(self.base.spec.prep))
-        self.buildEdit.setText(str(self.base.spec.build))
-        self.checkEdit.setText(str(self.base.spec.check))
+        self.prepareEdit.insertPlainText(str(self.base.spec.prep))
+        self.buildEdit.insertPlainText(str(self.base.spec.build))
+        self.checkEdit.insertPlainText(str(self.base.spec.check))
+        QApplication.restoreOverrideCursor()
 
     def __init__(self, Wizard, parent=None):
         super(ScriptsPage, self).__init__(parent)
@@ -502,7 +519,7 @@ class ScriptsPage(QtWidgets.QWizardPage):
             "</p></body></html>")
 
         prepareLabel = QLabel("%prepare: ")
-        self.prepareEdit = QTextEdit()
+        self.prepareEdit = QPlainTextEdit()
         prepareLabelText = QLabel(
             self.base.tip_html_style %
             ("Script commands to prepare the program (e.g. to "
@@ -511,14 +528,14 @@ class ScriptsPage(QtWidgets.QWizardPage):
              "%autosetup -n NAME if the source file unpacks into NAME."))
 
         buildLabel = QLabel("%build: ")
-        self.buildEdit = QTextEdit()
+        self.buildEdit = QPlainTextEdit()
         buildLabelText = QLabel(
             self.base.tip_html_style %
             ("Script commands to build the program (e.g. to compile it)"
              " and get it ready for installing."))
 
         checkLabel = QLabel("%check: ")
-        self.checkEdit = QTextEdit()
+        self.checkEdit = QPlainTextEdit()
         checkLabelText = QLabel(
             self.base.tip_html_style %
             "Script commands to test the program.")
@@ -579,6 +596,7 @@ class ScriptsPage(QtWidgets.QWizardPage):
         self.base.spec.check = Command(self.checkEdit.toPlainText())
         if self.buildArchCheckbox.isChecked():
             self.base.spec.BuildArch = "noarch"
+        QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
         self.base.build_project()
         self.base.run_compiled_source_analysis()
         return True
@@ -590,10 +608,11 @@ class ScriptsPage(QtWidgets.QWizardPage):
 class InstallPage(QtWidgets.QWizardPage):
 
     def initializePage(self):
-        self.installEdit.setText(str(self.base.spec.install))
-        self.pretransEdit.setText(str(self.base.spec.pretrans))
-        self.preEdit.setText(str(self.base.spec.pre))
-        self.postEdit.setText(str(self.base.spec.post))
+        self.installEdit.insertPlainText(str(self.base.spec.install))
+        self.pretransEdit.insertPlainText(str(self.base.spec.pretrans))
+        self.preEdit.insertPlainText(str(self.base.spec.pre))
+        self.postEdit.insertPlainText(str(self.base.spec.post))
+        QApplication.restoreOverrideCursor()
 
     def __init__(self, Wizard, parent=None):
         super(InstallPage, self).__init__(parent)
@@ -611,25 +630,25 @@ class InstallPage(QtWidgets.QWizardPage):
             "</p></body></html>")
 
         pretransLabel = QLabel("%pretrans: ")
-        self.pretransEdit = QTextEdit()
+        self.pretransEdit = QPlainTextEdit()
         pretransLabelText = QLabel(
             self.base.tip_html_style %
             "At the start of transaction.")
 
         preLabel = QLabel("%pre: ")
-        self.preEdit = QTextEdit()
+        self.preEdit = QPlainTextEdit()
         preLabelText = QLabel(
             self.base.tip_html_style %
             "Before a package is installed.")
 
         installLabel = QLabel("%install: ")
-        self.installEdit = QTextEdit()
+        self.installEdit = QPlainTextEdit()
         installLabelText = QLabel(
             self.base.tip_html_style %
             "Script commands to install the program.")
 
         postLabel = QLabel("%post: ")
-        self.postEdit = QTextEdit()
+        self.postEdit = QPlainTextEdit()
         postLabelText = QLabel(
             self.base.tip_html_style %
             "After a package is installed.")
@@ -686,6 +705,7 @@ class InstallPage(QtWidgets.QWizardPage):
         self.base.spec.pretrans = Command(self.pretransEdit.toPlainText())
         self.base.spec.pre = Command(self.preEdit.toPlainText())
         self.base.spec.post = Command(self.postEdit.toPlainText())
+        QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
         self.base.install_project()
         self.base.run_installed_source_analysis()
         return True
@@ -697,9 +717,11 @@ class InstallPage(QtWidgets.QWizardPage):
 class RequiresPage(QtWidgets.QWizardPage):
 
     def initializePage(self):
-        self.bRequiresEdit.setText('\n'.join(self.base.spec.BuildRequires))
-        self.requiresEdit.setText('\n'.join(self.base.spec.Requires))
-        self.providesEdit.setText('\n'.join(self.base.spec.Provides))
+        self.bRequiresEdit.insertPlainText(
+            '\n'.join(self.base.spec.BuildRequires))
+        self.requiresEdit.insertPlainText('\n'.join(self.base.spec.Requires))
+        self.providesEdit.insertPlainText('\n'.join(self.base.spec.Provides))
+        QApplication.restoreOverrideCursor()
 
     def __init__(self, Wizard, parent=None):
         super(RequiresPage, self).__init__(parent)
@@ -710,7 +732,7 @@ class RequiresPage(QtWidgets.QWizardPage):
         self.setSubTitle(self.tr("Write requires and provides"))
 
         buildRequiresLabel = QLabel("BuildRequires: ")
-        self.bRequiresEdit = QTextEdit()
+        self.bRequiresEdit = QPlainTextEdit()
         self.bRequiresEdit.setMaximumHeight(220)
         buildRequiresLabelText = QLabel(
             self.base.tip_html_style %
@@ -724,7 +746,7 @@ class RequiresPage(QtWidgets.QWizardPage):
             "</p></body><html>")
 
         requiresLabel = QLabel("Requires: ")
-        self.requiresEdit = QTextEdit()
+        self.requiresEdit = QPlainTextEdit()
         self.requiresEdit.setMaximumHeight(220)
         requiresLabelText = QLabel(
             self.base.tip_html_style %
@@ -732,7 +754,7 @@ class RequiresPage(QtWidgets.QWizardPage):
              "when the program is installed."))
 
         providesLabel = QLabel("Provides: ")
-        self.providesEdit = QTextEdit()
+        self.providesEdit = QPlainTextEdit()
         providesLabelText = QLabel(
             self.base.tip_html_style %
             "List virtual package names that this package provides.")
@@ -790,9 +812,9 @@ class RequiresPage(QtWidgets.QWizardPage):
 class UninstallPage(QtWidgets.QWizardPage):
 
     def initializePage(self):
-        self.postunEdit.setText(str(self.base.spec.postun))
-        self.preunEdit.setText(str(self.base.spec.preun))
-        self.posttransEdit.setText(str(self.base.spec.posttrans))
+        self.postunEdit.insertPlainText(str(self.base.spec.postun))
+        self.preunEdit.insertPlainText(str(self.base.spec.preun))
+        self.posttransEdit.insertPlainText(str(self.base.spec.posttrans))
 
     def __init__(self, Wizard, parent=None):
         super(UninstallPage, self).__init__(parent)
@@ -809,19 +831,19 @@ class UninstallPage(QtWidgets.QWizardPage):
             "and what to do after uninstallation.<br></p></body></html>")
 
         preunLabel = QLabel("%preun: ")
-        self.preunEdit = QTextEdit()
+        self.preunEdit = QPlainTextEdit()
         preunLabelText = QLabel(
             self.base.tip_html_style %
             "Before a package is uninstalled.")
 
         postunLabel = QLabel("%postun: ")
-        self.postunEdit = QTextEdit()
+        self.postunEdit = QPlainTextEdit()
         postunLabelText = QLabel(
             self.base.tip_html_style %
             "After a package is uninstalled.")
 
         posttransLabel = QLabel("%posttrans: ")
-        self.posttransEdit = QTextEdit()
+        self.posttransEdit = QPlainTextEdit()
         posttransLabelText = QLabel(
             self.base.tip_html_style %
             "At the end of transaction.")
@@ -866,6 +888,7 @@ class UninstallPage(QtWidgets.QWizardPage):
         self.base.spec.postun = Command(self.postunEdit.toPlainText())
         self.base.spec.preun = Command(self.preunEdit.toPlainText())
         self.base.spec.posttrans = Command(self.posttransEdit.toPlainText())
+        QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
         self.base.write_spec()
         return True
 
@@ -876,6 +899,7 @@ class UninstallPage(QtWidgets.QWizardPage):
 class BuildPage(QtWidgets.QWizardPage):
 
     def initializePage(self):
+        QApplication.restoreOverrideCursor()
         self.buildLocationEdit.setText(expanduser("~"))
         self.distro = self.base.target_distro
         self.arch = self.base.target_arch
@@ -1022,24 +1046,83 @@ class BuildPage(QtWidgets.QWizardPage):
     def buildSrpm(self):
         self.textBuildSRPMLabel.setText('Building SRPM...')
         self.textBuildSRPMLabel.repaint()
-        self.base.build_srpm()
-        Command("cp " + path_to_str(self.base.srpm_path) + " " +
-                self.buildLocationEdit.text()).execute()
         self.base.final_path = self.buildLocationEdit.text()
+
+        self.srpm_dialog = QDialog(self)
+        self.srpm_dialog.resize(600, 400)
+        self.srpm_dialog.setWindowTitle('Building SRPM')
+        self.srpm_progress = QPlainTextEdit()
+        self.srpm_progress.setReadOnly(True)
+        self.cancelButton = QPushButton('Cancel')
+        self.cancelButton.setMinimumHeight(45)
+        self.cancelButton.setMaximumHeight(45)
+        self.cancelButton.setMinimumWidth(100)
+        self.cancelButton.setMaximumWidth(115)
+        self.cancelButton.clicked.connect(self.CancelSRPM)
+        mainLayout = QVBoxLayout()
+        mainLayout.addSpacing(40)
+        mainLayout.addWidget(self.srpm_progress)
+        mainLayout.addSpacing(40)
+        grid = QGridLayout()
+        grid.addWidget(self.cancelButton)
+        mainLayout.addLayout(grid)
+        self.srpm_dialog.setLayout(mainLayout)
+
+        self.srpm_dialog.show()
+        self.srpm_process = ThreadWrapper(self.srpm_progress,
+                                          self.base.build_srpm)
+        self.srpm_process.run()
+
+    def CancelSRPM(self):
+        self.srpm_dialog.close()
+        self.srpm_process.kill()
+        if self.base.srpm_path:
+            Command("cp " + str(self.base.srpm_path) + " " +
+                    str(self.base.final_path)).execute()
         self.textBuildSRPMLabel.setText('Your source package was build in '
                                         + self.base.final_path)
 
     def buildRpm(self):
         self.textBuildRPMLabel.setText('Building RPM...')
-        self.textBuildSRPMLabel.repaint()
+        self.textBuildRPMLabel.repaint()
         self.base.final_path = self.buildLocationEdit.text()
+
+        self.rpm_dialog = QDialog(self)
+        self.rpm_dialog.resize(600, 400)
+        self.rpm_dialog.setWindowTitle('Building RPM')
+        self.rpm_progress = QPlainTextEdit()
+        self.rpm_progress.setReadOnly(True)
+        self.rpm_progress.insertPlainText('Building RPM...')
+        self.cancelButton = QPushButton('Cancel')
+        self.cancelButton.setMinimumHeight(45)
+        self.cancelButton.setMaximumHeight(45)
+        self.cancelButton.setMinimumWidth(100)
+        self.cancelButton.setMaximumWidth(115)
+        self.cancelButton.clicked.connect(self.CancelRPM)
+        mainLayout = QVBoxLayout()
+        mainLayout.addSpacing(40)
+        mainLayout.addWidget(self.rpm_progress)
+        mainLayout.addSpacing(40)
+        grid = QGridLayout()
+        grid.addWidget(self.cancelButton)
+        mainLayout.addLayout(grid)
+        self.rpm_dialog.setLayout(mainLayout)
+
         arch = self.BuildArchEdit.currentText()
         distro = self.BuildDistroEdit.currentText()
-        self.base.build_rpm_recover(distro, arch)
-        packages = self.base.rpm_path
-        for package in packages:
-            Command("cp " + str(package) + " " +
-                    self.base.final_path).execute()
+        self.rpm_dialog.show()
+        self.rpm_process = ThreadWrapper(self.rpm_progress,
+                                         self.base.build_rpm_recover,
+                                         distro, arch)
+        self.rpm_process.run()
+
+    def CancelRPM(self):
+        self.rpm_dialog.close()
+        self.rpm_process.kill()
+        if self.base.rpm_path:
+            for package in self.base.rpm_path:
+                Command("cp " + str(package) + " " +
+                        str(self.base.final_path)).execute()
         self.textBuildRPMLabel.setText(
             'Your package was build in ' + self.base.final_path)
 
@@ -1195,6 +1278,7 @@ class CoprLoginPage(QtWidgets.QWizardPage):
         self.base.coprpackageUrl = self.packageUrlEdit.text()
         self.base.coprlogin = self.loginEdit.text()
         self.base.coprtoken = self.tokenEdit.text()
+        QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
         self.base.copr_set_config(self.base.coprusername,
                                   self.base.coprlogin, self.base.coprtoken)
         return True
@@ -1204,6 +1288,9 @@ class CoprLoginPage(QtWidgets.QWizardPage):
 
 
 class CoprDistroPage(QtWidgets.QWizardPage):
+
+    def initializePage(self):
+        QApplication.restoreOverrideCursor()
 
     def __init__(self, Wizard, parent=None):
         super(CoprDistroPage, self).__init__(parent)
@@ -1286,12 +1373,11 @@ class CoprBuildPage(QtWidgets.QWizardPage):
 
         self.textBuildLabel.setText(
             "<html><head/><body><p align=\"left\"><span" +
-            "style=\" font-size:24pt;\">" +
-            "New project " + self.newproject +
-            " will be created. <br>" +
+            "style=\" font-size:20pt;\">" +
             "You can also add descriptions and instructions" +
             " for your package. <br>" +
-            "Next step will build package with Copr." +
+            "The build button will create new project " +
+            self.newproject + " and build package with Copr." +
             "</span></p></body></html>")
 
     def __init__(self, Wizard, parent=None):
@@ -1303,15 +1389,14 @@ class CoprBuildPage(QtWidgets.QWizardPage):
         self.setSubTitle(self.tr("Copr additional information"))
 
         self.textBuildLabel = QLabel()
-
         self.packageDescLabel = QLabel("Description ")
-        self.packageDescEdit = QTextEdit()
+        self.packageDescEdit = QPlainTextEdit()
         self.packageDescLabelText = QLabel(
             self.base.tip_html_style %
             "Description for your package, optional.")
 
         self.packageInstuctionLabel = QLabel("Instructions ")
-        self.packageInstuctionEdit = QTextEdit()
+        self.packageInstuctionEdit = QPlainTextEdit()
         self.packageInstuctionLabelText = QLabel(
             self.base.tip_html_style %
             ("How install your project, where users can report bugs "
@@ -1336,6 +1421,13 @@ class CoprBuildPage(QtWidgets.QWizardPage):
         gridInstuction.addWidget(self.packageInstuctionEdit, 0, 1, 1, 8)
         gridInstuction.addWidget(self.packageInstuctionLabelText, 1, 0, 1, 8)
 
+        self.coprBuildButton = QPushButton('Build package with Copr')
+        self.coprBuildButton.setMinimumHeight(45)
+        self.coprBuildButton.setMaximumHeight(45)
+        self.coprBuildButton.setMinimumWidth(200)
+        self.coprBuildButton.setMaximumWidth(205)
+        self.coprBuildButton.clicked.connect(self.buildCopr)
+
         mainLayout.addSpacing(25)
         frameDesc.setLayout(gridDesc)
         frameInstuction.setLayout(gridInstuction)
@@ -1344,50 +1436,49 @@ class CoprBuildPage(QtWidgets.QWizardPage):
         mainLayout.addSpacing(15)
         mainLayout.addWidget(frameInstuction)
         mainLayout.addSpacing(15)
+        mainLayout.addWidget(self.coprBuildButton, 0, QtCore.Qt.AlignCenter)
         self.setLayout(mainLayout)
 
     def validatePage(self):
-        self.textBuildLabel.setText(
-            "<html><head/><body><p align=\"left\"><span" +
-            "style=\" font-size:24pt;\">" +
-            "Creating new project..." +
-            "</span></p></body></html>")
-        self.textBuildLabel.repaint()
+        return True
+
+    def buildCopr(self):
+        self.copr_dialog = QDialog(self)
+        self.copr_dialog.resize(600, 400)
+        self.copr_dialog.setWindowTitle('Building Copr')
+        self.copr_progress = QPlainTextEdit()
+        self.copr_progress.setReadOnly(True)
+        self.cancelButton = QPushButton('Cancel')
+        self.cancelButton.setMinimumHeight(45)
+        self.cancelButton.setMaximumHeight(45)
+        self.cancelButton.setMinimumWidth(100)
+        self.cancelButton.setMaximumWidth(115)
+        self.cancelButton.clicked.connect(self.CancelCopr)
+        mainLayout = QVBoxLayout()
+        mainLayout.addSpacing(40)
+        mainLayout.addWidget(self.copr_progress)
+        mainLayout.addSpacing(40)
+        grid = QGridLayout()
+        grid.addWidget(self.cancelButton)
+        mainLayout.addLayout(grid)
+        self.copr_dialog.setLayout(mainLayout)
+
+        self.copr_dialog.show()
         self.base.coprdesc = self.packageDescEdit.toPlainText()
         self.base.coprintro = self.packageInstuctionEdit.toPlainText()
-        try:
-            self.base.copr_create_project(self.base.coprpackageName,
+
+        self.copr_process = ThreadWrapper(self.copr_progress,
+                                          self.base.copr_create_and_build,
+                                          self.base.coprpackageName,
                                           self.base.coprversion,
                                           self.base.coprdesc,
-                                          self.base.coprintro)
-        except subprocess.CalledProcessError:
-            self.textBuildLabel.setText(
-                "<html><head/><body><p align=\"left\"><span" +
-                "style=\" font-size:24pt;\" font color=\'#FF3333\'>" +
-                "Error in creating project!" +
-                "<br> Please check your log in information" +
-                "</span></p></body></html>")
-            return False
-        self.textBuildLabel.setText(
-            "<html><head/><body><p align=\"left\"><span" +
-            "style=\" font-size:24pt;\">" +
-            "Creating new project - DONE<br>" +
-            "Build proccess started...<br>" +
-            "It takes a while, but it may be safely interrupted."
-            "</span></p></body></html>")
-        self.textBuildLabel.repaint()
-        try:
-            self.base.copr_build(
-                self.base.coprpackageName, self.base.coprpackageUrl)
-        except subprocess.CalledProcessError:
-            self.textBuildLabel.setText(
-                "<html><head/><body><p align=\"left\"><span" +
-                "style=\" font-size:24pt;\" font color=\'#FF3333\'>" +
-                "Error in building project!" +
-                "<br> Please check your url information" +
-                "</span></p></body></html>")
-            return False
-        return True
+                                          self.base.coprintro,
+                                          self.base.coprpackageUrl)
+        self.copr_process.run()
+
+    def CancelCopr(self):
+        self.copr_dialog.close()
+        self.copr_process.kill()
 
     def nextId(self):
         return Wizard.PageCoprFinal
@@ -1396,6 +1487,7 @@ class CoprBuildPage(QtWidgets.QWizardPage):
 class CoprFinalPage(QtWidgets.QWizardPage):
 
     def initializePage(self):
+        QApplication.restoreOverrideCursor()
         self.newproject = self.base.coprusername + \
             "/" + self.base.coprpackageName
         self.webpage = "https://copr.fedoraproject.org/api/coprs/" + \
